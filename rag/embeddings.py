@@ -1,5 +1,89 @@
 from __future__ import annotations
 
+import os
+from typing import Iterable
 
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    raise NotImplementedError("Embedding calls will be implemented in Phase 3.")
+import requests
+
+
+def embed_texts(texts: list[str], batch_size: int = 8) -> list[list[float]]:
+    api_key = os.getenv("HF_API_KEY", "")
+    model = os.getenv("HF_EMBEDDING_MODEL", "")
+    if not api_key or not model:
+        raise ValueError("HF_API_KEY and HF_EMBEDDING_MODEL must be set.")
+
+    urls = [
+        f"https://router.huggingface.co/hf-inference/pipeline/feature-extraction/{model}",
+        f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model}",
+        f"https://router.huggingface.co/hf-inference/models/{model}",
+        f"https://api-inference.huggingface.co/models/{model}",
+    ]
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    embeddings: list[list[float]] = []
+    for batch in _batch(texts, batch_size):
+        data = None
+        last_error = None
+        for url in urls:
+            response = requests.post(
+                url,
+                headers=headers,
+                json={"inputs": batch, "options": {"wait_for_model": True}},
+                timeout=60,
+            )
+            if response.status_code == 404:
+                last_error = response.text
+                continue
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Hugging Face API error: {response.status_code} {response.text}"
+                )
+            data = response.json()
+            break
+
+        if data is None:
+            raise RuntimeError(
+                "Hugging Face API error: 404 for all endpoints. "
+                "Check model name and token, then retry."
+            )
+        embeddings.extend(_pool_embeddings(data))
+    return embeddings
+
+
+def _batch(items: list[str], size: int) -> Iterable[list[str]]:
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
+
+
+def _pool_embeddings(data: list) -> list[list[float]]:
+    if not data:
+        return []
+
+    if isinstance(data[0], (int, float)):
+        return [data]
+
+    if isinstance(data[0], list) and data and isinstance(data[0][0], (int, float)):
+        return [_mean_pool(data)]
+
+    pooled: list[list[float]] = []
+    for item in data:
+        if not item:
+            pooled.append([])
+            continue
+        if isinstance(item[0], (int, float)):
+            pooled.append(item)
+        else:
+            pooled.append(_mean_pool(item))
+    return pooled
+
+
+def _mean_pool(token_vectors: list[list[float]]) -> list[float]:
+    length = len(token_vectors)
+    if length == 0:
+        return []
+    dims = len(token_vectors[0])
+    sums = [0.0] * dims
+    for vector in token_vectors:
+        for i, value in enumerate(vector):
+            sums[i] += float(value)
+    return [value / length for value in sums]
