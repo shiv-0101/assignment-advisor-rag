@@ -7,19 +7,31 @@ from typing import Iterable
 from pinecone import Pinecone
 
 
-def upsert_vectors(vectors: list[tuple[str, list[float], dict]], batch_size: int = 100) -> None:
+def upsert_vectors(
+    vectors: list[tuple[str, list[float], dict]],
+    batch_size: int = 100,
+    namespace: str | None = None,
+) -> None:
     index = _get_index()
+    namespace = _resolve_namespace(namespace)
     for batch in _batch(vectors, batch_size):
-        index.upsert(vectors=batch)
+        index.upsert(vectors=batch, namespace=namespace)
 
 
-def query_vectors(vector: list[float], top_k: int, filters: dict | None = None) -> list[dict]:
+def query_vectors(
+    vector: list[float],
+    top_k: int,
+    filters: dict | None = None,
+    namespace: str | None = None,
+) -> list[dict]:
     index = _get_index()
+    namespace = _resolve_namespace(namespace)
     response = index.query(
         vector=vector,
         top_k=top_k,
         include_metadata=True,
         filter=filters,
+        namespace=namespace,
     )
     return response.get("matches", [])
 
@@ -38,6 +50,10 @@ def _get_index():
             f"Pinecone index '{index_name}' not found. Create it in Pinecone before running."
         )
     return client.Index(index_name)
+
+
+def _resolve_namespace(namespace: str | None) -> str | None:
+    return namespace or os.getenv("PINECONE_NAMESPACE")
 
 
 def _batch(items: list[tuple[str, list[float], dict]], size: int) -> Iterable[list]:
