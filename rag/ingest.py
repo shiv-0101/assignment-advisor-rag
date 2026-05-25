@@ -13,9 +13,13 @@ HEADING_REGEX = re.compile(
     r"^(?:\d+(?:\.\d+)*\s+)?([A-Z][A-Z\s\-]{2,}|[A-Z][\w\s\-]{1,})$"
 )
 SECTION_KEYWORDS = {
+    "conclusions",
     "conclusion",
+    "requirement",
     "requirements",
+    "rubrics",
     "rubric",
+    "grading criteria",
     "grading",
     "introduction",
     "abstract",
@@ -23,7 +27,9 @@ SECTION_KEYWORDS = {
     "bibliography",
     "method",
     "methods",
+    "methodology",
     "results",
+    "analysis",
     "discussion",
 }
 
@@ -79,10 +85,10 @@ def detect_headings(text: str) -> list[str]:
             continue
         if len(stripped) > 80:
             continue
+        normalized = _normalize_heading(stripped)
         match = HEADING_REGEX.match(stripped)
         if not match:
             continue
-        normalized = match.group(1).strip().lower()
         if normalized in SECTION_KEYWORDS and normalized not in headings:
             headings.append(normalized)
     return headings
@@ -99,7 +105,7 @@ def _split_by_headings(text: str) -> list[tuple[str, str]]:
             if buffer:
                 sections.append((current_section, "\n".join(buffer).strip()))
                 buffer = []
-            current_section = stripped.lower()
+            current_section = _normalize_heading(stripped)
             continue
         buffer.append(line)
 
@@ -112,11 +118,15 @@ def _split_by_headings(text: str) -> list[tuple[str, str]]:
 def _is_heading_line(line: str) -> bool:
     if not line or len(line) > 80:
         return False
+    normalized = _normalize_heading(line)
     match = HEADING_REGEX.match(line)
     if not match:
         return False
-    normalized = match.group(1).strip().lower()
     return normalized in SECTION_KEYWORDS
+
+
+def _normalize_heading(heading: str) -> str:
+    return heading.strip().rstrip(":").lower()
 
 
 def _chunk_by_size(text: str, chunk_size: int, overlap: int) -> list[str]:
