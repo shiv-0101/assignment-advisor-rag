@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Iterable
 
 import requests
 
 
-def embed_texts(texts: list[str], batch_size: int = 8) -> list[list[float]]:
+def embed_texts(texts: list[str], batch_size: int = 8, max_retries: int = 2) -> list[list[float]]:
     api_key = os.getenv("HF_API_KEY", "")
     model = os.getenv("HF_EMBEDDING_MODEL", "")
     if not api_key or not model:
@@ -25,21 +26,27 @@ def embed_texts(texts: list[str], batch_size: int = 8) -> list[list[float]]:
         data = None
         last_error = None
         for url in urls:
-            response = requests.post(
-                url,
-                headers=headers,
-                json={"inputs": batch, "options": {"wait_for_model": True}},
-                timeout=60,
-            )
-            if response.status_code == 404:
-                last_error = response.text
-                continue
-            if response.status_code != 200:
-                raise RuntimeError(
-                    f"Hugging Face API error: {response.status_code} {response.text}"
+            for attempt in range(max_retries + 1):
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    json={"inputs": batch, "options": {"wait_for_model": True}},
+                    timeout=60,
                 )
-            data = response.json()
-            break
+                if response.status_code in {429, 503} and attempt < max_retries:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                if response.status_code == 404:
+                    last_error = response.text
+                    break
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        f"Hugging Face API error: {response.status_code} {response.text}"
+                    )
+                data = response.json()
+                break
+            if data is not None or response.status_code != 404:
+                break
 
         if data is None:
             raise RuntimeError(
