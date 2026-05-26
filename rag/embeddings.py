@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import os
 import time
+from functools import lru_cache
 from typing import Iterable
 
 import requests
 
 
 def embed_texts(texts: list[str], batch_size: int = 8, max_retries: int = 2) -> list[list[float]]:
+    provider = os.getenv("EMBEDDING_PROVIDER", "hf").lower()
+    if provider == "local":
+        return _embed_texts_local(texts)
+
     api_key = os.getenv("HF_API_KEY", "")
     model = os.getenv("HF_EMBEDDING_MODEL", "")
     if not api_key or not model:
@@ -55,6 +60,25 @@ def embed_texts(texts: list[str], batch_size: int = 8, max_retries: int = 2) -> 
             )
         embeddings.extend(_pool_embeddings(data))
     return embeddings
+
+
+def _embed_texts_local(texts: list[str]) -> list[list[float]]:
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError as exc:
+        raise RuntimeError(
+            "Local embeddings require sentence-transformers. Install it and retry."
+        ) from exc
+
+    model_name = os.getenv("EMBEDDING_LOCAL_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    model = _get_local_model(model_name, SentenceTransformer)
+    vectors = model.encode(texts, normalize_embeddings=True).tolist()
+    return [list(map(float, vector)) for vector in vectors]
+
+
+@lru_cache(maxsize=1)
+def _get_local_model(model_name: str, loader) -> object:
+    return loader(model_name)
 
 
 def _batch(items: list[str], size: int) -> Iterable[list[str]]:

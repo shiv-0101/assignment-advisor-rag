@@ -4,3 +4,5 @@ pdfplumber==0.11.4
 requests==2.32.3
 pinecone==5.0.0
 python-dotenv==1.0.1
+sentence-transformers==2.7.0
+torch==2.3.1
