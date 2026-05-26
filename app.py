@@ -24,15 +24,22 @@ def get_config() -> dict:
         "pinecone_index": os.getenv("PINECONE_INDEX", ""),
         "embedding_model": os.getenv("HF_EMBEDDING_MODEL", ""),
         "embedding_dimension": os.getenv("EMBEDDING_DIMENSION", ""),
+        "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "hf"),
+        "local_model": os.getenv("EMBEDDING_LOCAL_MODEL", ""),
     }
 
 
 def validate_config(config: dict) -> list[str]:
     missing = []
-    if not config["hf_api_key"]:
-        missing.append("HF_API_KEY")
-    if not config["embedding_model"]:
-        missing.append("HF_EMBEDDING_MODEL")
+    provider = config["embedding_provider"].lower()
+    if provider == "local":
+        if not config["local_model"]:
+            missing.append("EMBEDDING_LOCAL_MODEL")
+    else:
+        if not config["hf_api_key"]:
+            missing.append("HF_API_KEY")
+        if not config["embedding_model"]:
+            missing.append("HF_EMBEDDING_MODEL")
     if not config["pinecone_api_key"]:
         missing.append("PINECONE_API_KEY")
     if not config["pinecone_index"]:
@@ -58,6 +65,8 @@ def main() -> None:
         st.text_input("Pinecone index", value=config["pinecone_index"], disabled=True)
         st.text_input("Embedding model", value=config["embedding_model"], disabled=True)
         st.text_input("Embedding dimension", value=str(config["embedding_dimension"]), disabled=True)
+        st.text_input("Embedding provider", value=config["embedding_provider"], disabled=True)
+        st.text_input("Local model", value=config["local_model"], disabled=True)
         chunk_size = st.number_input("Chunk size (chars)", min_value=800, max_value=4000, value=2200)
         overlap = st.number_input("Overlap (chars)", min_value=0, max_value=1000, value=250)
         top_k = st.number_input("Top-k per doc", min_value=1, max_value=10, value=4)
