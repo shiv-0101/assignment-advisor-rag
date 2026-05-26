@@ -67,6 +67,9 @@ def main() -> None:
         st.text_input("Embedding dimension", value=str(config["embedding_dimension"]), disabled=True)
         st.text_input("Embedding provider", value=config["embedding_provider"], disabled=True)
         st.text_input("Local model", value=config["local_model"], disabled=True)
+        provider = config["embedding_provider"].lower()
+        if provider == "local":
+            st.info("Using local embeddings. Expect higher CPU usage.")
         chunk_size = st.number_input("Chunk size (chars)", min_value=800, max_value=4000, value=2200)
         overlap = st.number_input("Overlap (chars)", min_value=0, max_value=1000, value=250)
         top_k = st.number_input("Top-k per doc", min_value=1, max_value=10, value=4)
