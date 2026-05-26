@@ -12,6 +12,8 @@ def embed_texts(texts: list[str], batch_size: int = 8, max_retries: int = 2) -> 
     provider = os.getenv("EMBEDDING_PROVIDER", "hf").lower()
     if provider == "local":
         return _embed_texts_local(texts)
+    if provider != "hf":
+        raise ValueError("EMBEDDING_PROVIDER must be 'hf' or 'local'.")
 
     api_key = os.getenv("HF_API_KEY", "")
     model = os.getenv("HF_EMBEDDING_MODEL", "")
@@ -41,6 +43,11 @@ def embed_texts(texts: list[str], batch_size: int = 8, max_retries: int = 2) -> 
                 if response.status_code in {429, 503} and attempt < max_retries:
                     time.sleep(1.5 * (attempt + 1))
                     continue
+                if response.status_code == 400 and "Model not supported" in response.text:
+                    raise RuntimeError(
+                        "Hugging Face API error: model not supported on hf-inference. "
+                        "Set EMBEDDING_PROVIDER=local or use a paid endpoint."
+                    )
                 if response.status_code == 404:
                     last_error = response.text
                     break
